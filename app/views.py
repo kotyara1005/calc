@@ -1,3 +1,5 @@
+import decimal
+
 from fastapi import APIRouter, status
 from fastapi.exceptions import HTTPException
 
@@ -6,6 +8,10 @@ from app.schemas import BaseResponse, PriceRequest
 from app.settings import DEFAULT_DISCOUNT
 
 router = APIRouter()
+
+
+def quantize_to_string(val: decimal.Decimal) -> str:
+    return str(val.quantize(decimal.Decimal(".01"), decimal.ROUND_HALF_UP))
 
 
 @router.get("/states")
@@ -36,16 +42,24 @@ async def compute_total_price(request: PriceRequest):
     taxes = price_with_discount * state_tax.tax_rate
     total = price_with_discount + taxes
 
+    print(
+        type(price),
+        type(discount_value),
+        type(price_with_discount),
+        type(taxes),
+        type(total),
+        total.quantize(decimal.Decimal(".01"), decimal.ROUND_HALF_UP),
+    )
     return BaseResponse(
         success=True,
         errors=[],
         result={
             "price_info": {
-                "price": price,
-                "discount_value": discount_value,
-                "price_with_discount": price_with_discount,
-                "taxes": taxes,
-                "total_price": total,
+                "price": quantize_to_string(price),
+                "discount_value": quantize_to_string(discount_value),
+                "price_with_discount": quantize_to_string(price_with_discount),
+                "taxes": quantize_to_string(taxes),
+                "total_price": quantize_to_string(total),
             },
             "discount": discount,
             "state_tax": state_tax,

@@ -1,4 +1,3 @@
-from asyncpg.exceptions import UniqueViolationError
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
-    unique_violation_error_handler,
 )
 from app.models import database
 from app.settings import ORIGINS
@@ -22,7 +20,6 @@ def create_app() -> FastAPI:
         exception_handlers={
             StarletteHTTPException: http_exception_handler,
             RequestValidationError: request_validation_exception_handler,
-            UniqueViolationError: unique_violation_error_handler,
         },
     )
 

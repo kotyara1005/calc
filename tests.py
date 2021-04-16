@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,23 +16,11 @@ def test_app():
 
 
 @pytest.fixture()
-def truncate_db(test_app):
-    from app.models import database
+def init_db(test_app):
+    from app.commands import drop_db, init_db
 
-    asyncio.get_event_loop().run_until_complete(
-        database.execute(
-            """
-                TRUNCATE TABLE transaction RESTART IDENTITY;
-            """
-        )
-    )
-    asyncio.get_event_loop().run_until_complete(
-        database.execute(
-            """
-                TRUNCATE TABLE wallet RESTART IDENTITY;
-            """
-        )
-    )
+    asyncio.get_event_loop().run_until_complete(drop_db())
+    asyncio.get_event_loop().run_until_complete(init_db())
 
 
 def test_ping(test_app):
@@ -42,275 +29,136 @@ def test_ping(test_app):
     assert response.json() == {"text": "pong"}
 
 
-def test_create_wallet(test_app, truncate_db):
-    response = test_app.post(
-        "/wallet", json={"client_id": 1, "currency": "USD"}
-    )
+def test_get_states(test_app, init_db):
+    response = test_app.get("/states")
     assert response.status_code == 200
 
     data = response.json()
     assert data["success"]
     assert data["errors"] == []
-    assert data["result"]["wallet"]["client_id"] == 1
-    assert data["result"]["wallet"]["amount"] == 0
-    assert data["result"]["wallet"]["currency"] == "USD"
+    assert data["result"]["state_codes"] == ["UT", "NV", "TX", "AL", "CA"]
 
 
-def test_create_wallet_conflict(test_app, truncate_db):
+def test_compute_total_price(test_app, init_db):
     response = test_app.post(
-        "/wallet", json={"client_id": 1, "currency": "USD"}
-    )
-    assert response.status_code == 200
-    response = test_app.post(
-        "/wallet", json={"client_id": 1, "currency": "USD"}
-    )
-    assert response.status_code == 409
-
-
-def test_add_money(test_app, truncate_db):
-    response = test_app.post(
-        "/wallet", json={"client_id": 101, "currency": "USD"}
+        "/total_price",
+        json={"amount": 3000, "price_for_one": 3.5, "state_code": "TX"},
     )
     assert response.status_code == 200
 
-    wallet_id = response.json()["result"]["wallet"]["id"]
-    request_id = str(uuid.uuid4())
-    response = test_app.post(
-        "/money/add",
-        json={
-            "wallet_id": wallet_id,
-            "request_id": request_id,
-            "amount": 10.1,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json() == {
+    data = response.json()
+    assert data == {
         "success": True,
         "errors": [],
         "result": {
-            "wallet": {
-                "id": wallet_id,
-                "client_id": 101,
-                "amount": 10.1,
-                "currency": "USD",
+            "price_info": {
+                "price": "10500.00",
+                "discount_value": "1050.00",
+                "price_with_discount": "9450.00",
+                "taxes": "590.63",
+                "total_price": "10040.63",
             },
-            "tr": {
-                "id": 1,
-                "from_wallet_id": None,
-                "to_wallet_id": 1,
-                "request_id": request_id,
-                "amount": 10.1,
-                "currency": "USD",
-            },
+            "discount": {"min_price": 10000, "discount": 0.1},
+            "state_tax": {"state_code": "TX", "tax_rate": 0.0625},
         },
     }
 
 
-def test_add_money_negative_amount(test_app, truncate_db):
+def test_compute_total_no_discount(test_app, init_db):
     response = test_app.post(
-        "/money/add",
-        json={
-            "wallet_id": 1,
-            "request_id": str(uuid.uuid4()),
-            "amount": -10,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 422
-    assert response.json() == {
-        "success": False,
-        "errors": [
-            {
-                "loc": ["body", "amount"],
-                "msg": "value should be greater then zero",
-                "type": "value_error",
-            }
-        ],
-        "result": None,
-    }
-
-
-def test_add_money_wallet_not_found(test_app, truncate_db):
-    request_id = str(uuid.uuid4())
-    response = test_app.post(
-        "/money/add",
-        json={
-            "wallet_id": 1,
-            "request_id": request_id,
-            "amount": 10.1,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 404
-    assert response.json() == {
-        "success": False,
-        "errors": ["Wallet(id=1) not found"],
-        "result": None,
-    }
-
-
-def test_send_money(test_app, truncate_db):
-    response = test_app.post(
-        "/wallet", json={"client_id": 1, "currency": "USD"}
-    )
-    assert response.status_code == 200
-    wallet_id_from = response.json()["result"]["wallet"]["id"]
-
-    response = test_app.post(
-        "/wallet", json={"client_id": 2, "currency": "USD"}
-    )
-    assert response.status_code == 200
-    wallet_id_to = response.json()["result"]["wallet"]["id"]
-
-    response = test_app.post(
-        "/money/add",
-        json={
-            "wallet_id": wallet_id_from,
-            "request_id": str(uuid.uuid4()),
-            "amount": 1000,
-            "currency": "USD",
-        },
+        "/total_price",
+        json={"amount": 1, "price_for_one": 1, "state_code": "UT"},
     )
     assert response.status_code == 200
 
-    request_id = str(uuid.uuid4())
-
-    response = test_app.post(
-        "/money/send",
-        json={
-            "from_wallet_id": wallet_id_from,
-            "to_wallet_id": wallet_id_to,
-            "request_id": request_id,
-            "amount": 500,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 200
-    assert response.json() == {
+    data = response.json()
+    assert data == {
         "success": True,
         "errors": [],
         "result": {
-            "wallet_from": {
-                "id": 1,
-                "client_id": 1,
-                "amount": 500.0,
-                "currency": "USD",
+            "price_info": {
+                "price": "1.00",
+                "discount_value": "0.00",
+                "price_with_discount": "1.00",
+                "taxes": "0.07",
+                "total_price": "1.07",
             },
-            "wallet_to": {
-                "id": 2,
-                "client_id": 2,
-                "amount": 500.0,
-                "currency": "USD",
-            },
-            "tr": {
-                "id": 2,
-                "from_wallet_id": 1,
-                "to_wallet_id": 2,
-                "request_id": request_id,
-                "amount": 500,
-                "currency": "USD",
-            },
+            "discount": None,
+            "state_tax": {"state_code": "UT", "tax_rate": 0.0685},
         },
     }
 
 
-def test_send_money_self_sending(test_app, truncate_db):
-    request_id = str(uuid.uuid4())
-    response = test_app.post(
-        "/money/send",
-        json={
-            "from_wallet_id": 1,
-            "to_wallet_id": 1,
-            "request_id": request_id,
-            "amount": 500,
-            "currency": "USD",
-        },
-    )
+@pytest.mark.parametrize(
+    "test_input,errors",
+    [
+        (
+            {"amount": 1, "price_for_one": 1.23, "state_code": "INVALID"},
+            ["invalid state code"],
+        ),
+        (
+            {"amount": 0, "price_for_one": 1.23, "state_code": "TX"},
+            [
+                {
+                    "ctx": {"limit_value": 0},
+                    "loc": ["body", "amount"],
+                    "msg": "ensure this value is greater than 0",
+                    "type": "value_error.number.not_gt",
+                }
+            ],
+        ),
+        (
+            {"amount": 1.2, "price_for_one": 1.23, "state_code": "TX"},
+            [
+                {
+                    "loc": ["body", "amount"],
+                    "msg": "value is not a valid integer",
+                    "type": "type_error.integer",
+                }
+            ],
+        ),
+        (
+            {"amount": -1, "price_for_one": 1.23, "state_code": "TX"},
+            [
+                {
+                    "ctx": {"limit_value": 0},
+                    "loc": ["body", "amount"],
+                    "msg": "ensure this value is greater than 0",
+                    "type": "value_error.number.not_gt",
+                }
+            ],
+        ),
+        (
+            {"amount": 1, "price_for_one": -1, "state_code": "TX"},
+            [
+                {
+                    "ctx": {"limit_value": "0"},
+                    "loc": ["body", "price_for_one"],
+                    "msg": "ensure this value is greater than 0",
+                    "type": "value_error.number.not_gt",
+                }
+            ],
+        ),
+        (
+            {"amount": 1, "price_for_one": 0, "state_code": "TX"},
+            [
+                {
+                    "ctx": {"limit_value": "0"},
+                    "loc": ["body", "price_for_one"],
+                    "msg": "ensure this value is greater than 0",
+                    "type": "value_error.number.not_gt",
+                }
+            ],
+        ),
+    ],
+)
+def test_compute_total_invalid_input(test_app, init_db, test_input, errors):
+    response = test_app.post("/total_price", json=test_input,)
     assert response.status_code == 422
-    assert response.json() == {
+
+    data = response.json()
+    assert data == {
         "success": False,
-        "errors": [
-            {
-                "loc": ["body", "__root__"],
-                "msg": "self sending",
-                "type": "value_error",
-            }
-        ],
+        "errors": errors,
         "result": None,
     }
-
-
-def test_send_money_not_enough_money(test_app, truncate_db):
-    response = test_app.post(
-        "/wallet", json={"client_id": 1, "currency": "USD"}
-    )
-    assert response.status_code == 200
-    wallet_id_from = response.json()["result"]["wallet"]["id"]
-
-    response = test_app.post(
-        "/wallet", json={"client_id": 2, "currency": "USD"}
-    )
-    assert response.status_code == 200
-    wallet_id_to = response.json()["result"]["wallet"]["id"]
-
-    request_id = str(uuid.uuid4())
-
-    response = test_app.post(
-        "/money/send",
-        json={
-            "from_wallet_id": wallet_id_from,
-            "to_wallet_id": wallet_id_to,
-            "request_id": request_id,
-            "amount": 500,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 402
-    assert response.json() == {
-        "success": False,
-        "errors": ["not enough money"],
-        "result": None,
-    }
-
-
-def test_send_money_not_enough_money_wallet_id_from_not_found(
-    test_app, truncate_db
-):
-    request_id = str(uuid.uuid4())
-
-    response = test_app.post(
-        "/money/send",
-        json={
-            "from_wallet_id": 102,
-            "to_wallet_id": 101,
-            "request_id": request_id,
-            "amount": 500,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 404
-
-
-def test_send_money_not_enough_money_wallet_id_to_not_found(
-    test_app, truncate_db
-):
-    response = test_app.post(
-        "/wallet", json={"client_id": 1, "currency": "USD"}
-    )
-    assert response.status_code == 200
-    wallet_id_from = response.json()["result"]["wallet"]["id"]
-
-    request_id = str(uuid.uuid4())
-
-    response = test_app.post(
-        "/money/send",
-        json={
-            "from_wallet_id": wallet_id_from,
-            "to_wallet_id": 100,
-            "request_id": request_id,
-            "amount": 500,
-            "currency": "USD",
-        },
-    )
-    assert response.status_code == 404

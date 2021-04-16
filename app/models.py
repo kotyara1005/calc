@@ -1,27 +1,19 @@
-from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import List, Optional
 
 import databases
-from pydantic import BaseModel
+from pydantic import BaseModel, condecimal
 
 from app.settings import DATABASE_URL
 
 database = databases.Database(DATABASE_URL)
 
-
-@asynccontextmanager
-async def database_context():
-    await database.connect()
-    try:
-        yield
-    finally:
-        await database.disconnect()
+PositiveDecimal = condecimal(ge=Decimal(0), max_digits=30, decimal_places=7)
 
 
 class StateTax(BaseModel):
     state_code: str
-    tax_rate: Decimal  # TODO positive
+    tax_rate: PositiveDecimal
 
     @classmethod
     async def get_all_state_codes(cls) -> List[str]:
@@ -49,8 +41,8 @@ class StateTax(BaseModel):
 
 
 class Discount(BaseModel):
-    min_price: Decimal  # TODO positive
-    discount: Decimal
+    min_price: PositiveDecimal
+    discount: PositiveDecimal
 
     @classmethod
     async def get_by_price(cls, price: Decimal) -> Optional["Discount"]:

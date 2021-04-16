@@ -1,20 +1,33 @@
-from asyncpg.exceptions import UniqueViolationError
+import json
+from decimal import Decimal
+
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import JSONResponse
-from starlette.status import HTTP_409_CONFLICT, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.responses import Response
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from app.schemas import BaseResponse
 
 
-async def unique_violation_error_handler(
-    request: Request, exc: UniqueViolationError
-) -> JSONResponse:
-    return JSONResponse(
-        BaseResponse(success=False, errors=[exc.detail], result=None).dict(),
-        status_code=HTTP_409_CONFLICT,
-    )
+def encode_decimal(value):
+    if isinstance(value, Decimal):
+        return str(value)
+    return value
+
+
+class JSONResponse(Response):
+    media_type = "application/json"
+
+    def render(self, content) -> bytes:
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            indent=None,
+            separators=(",", ":"),
+            default=encode_decimal,
+        ).encode("utf-8")
 
 
 async def http_exception_handler(
