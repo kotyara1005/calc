@@ -1,0 +1,10 @@
+databases[postgresql]==0.4.3
+fastapi==0.63.0
+pydantic==1.8.1
+uvicorn==0.13.4
+yoyo-migrations==7.3.1
+psycopg2-binary==2.8.6
+pytest==6.2.2
+requests==2.25.1
+pytest-cov
+typer==0.3.2

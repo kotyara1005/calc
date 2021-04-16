@@ -1,0 +1,18 @@
+version: "3.3"
+services:
+  test:
+    depends_on:
+      - "test_pg"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://postgres:dbpass@test_pg:5432/test_db
+    command: bash -c "./etc/wait_for_it.sh test_pg:5432 -s -t 30 -- yoyo apply --database $$DATABASE_URL ./migrations && pytest -vvv tests.py --cov=app"
+
+  test_pg:
+    image: postgres:10-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=dbpass
+      - POSTGRES_DB=test_db

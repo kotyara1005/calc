@@ -1,0 +1,29 @@
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 79
+known_first_party = []
+known_third_party = []
+
+[tool.black]
+line-length = 79
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+/(
+   venv
+)/
+'''
+
+[tool.flakehell]
+exclude = ["venv"]
+format = "grouped"
+max_line_length = 79
+show_source = false
+
+# list of plugins and rules for them
+[tool.flakehell.plugins]
+pyflakes = ["+*", "-F401"]
+pycodestyle = ["-*"]
+"mccabe" = ["+*"]
+"flake8-*" = ["+*"]
