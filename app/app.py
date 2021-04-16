@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from app.exception_handlers import (
     http_exception_handler,
@@ -9,8 +10,6 @@ from app.exception_handlers import (
 from app.models import database
 from app.settings import ORIGINS
 from app.views import router
-
-# TODO index.html
 
 
 def create_app() -> FastAPI:
@@ -35,5 +34,9 @@ def create_app() -> FastAPI:
     @app.get("/ping")
     def ping():
         return {"text": "pong"}
+
+    @app.get("/", response_class=HTMLResponse)
+    def index():
+        return open("front/index.html").read()
 
     return app

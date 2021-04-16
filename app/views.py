@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 def quantize_to_string(val: decimal.Decimal) -> str:
-    return str(val.quantize(decimal.Decimal(".01"), decimal.ROUND_HALF_UP))
+    return str(val.quantize(decimal.Decimal(".01"), decimal.ROUND_UP))
 
 
 @router.get("/states")
