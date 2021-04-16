@@ -1,4 +1,5 @@
 import csv
+import logging
 
 from app.models import database
 
@@ -15,7 +16,7 @@ async def is_empty_db() -> bool:
 
 async def init_db():
     if not await is_empty_db():
-        print("table is not empty")
+        logging.error("table is not empty")
         return
 
     await database.execute_many(

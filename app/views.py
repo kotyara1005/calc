@@ -42,14 +42,6 @@ async def compute_total_price(request: PriceRequest):
     taxes = price_with_discount * state_tax.tax_rate
     total = price_with_discount + taxes
 
-    print(
-        type(price),
-        type(discount_value),
-        type(price_with_discount),
-        type(taxes),
-        type(total),
-        total.quantize(decimal.Decimal(".01"), decimal.ROUND_HALF_UP),
-    )
     return BaseResponse(
         success=True,
         errors=[],
